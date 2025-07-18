@@ -1,5 +1,6 @@
 import { atom } from 'nanostores';
 import type { SupabaseUser, SupabaseStats, SupabaseApiKey, SupabaseCredentials } from '~/types/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 export interface SupabaseProject {
   id: string;
@@ -57,6 +58,19 @@ if (initialState.token && !initialState.stats) {
 export const isConnecting = atom(false);
 export const isFetchingStats = atom(false);
 export const isFetchingApiKeys = atom(false);
+
+// Singleton Supabase client
+let supabase: any = null;
+
+export function getSupabaseClient() {
+  if (!supabase) {
+    // Ganti dengan URL dan anon key dari instruksi user
+    const supabaseUrl = 'https://ajzjisgwhvxcggfybpbq.supabase.co';
+    const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqemppc2d3aHZ4Y2dnZnlicGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI4MDYwMTUsImV4cCI6MjA2ODM4MjAxNX0.5D-9_Sz4psLiMx71WQB4OyVsXp056C-Qzxe8kmWrhXU';
+    supabase = createClient(supabaseUrl, supabaseAnonKey);
+  }
+  return supabase;
+}
 
 export function updateSupabaseConnection(connection: Partial<SupabaseConnectionState>) {
   const currentState = supabaseConnection.get();
@@ -188,4 +202,28 @@ export async function fetchProjectApiKeys(projectId: string, token: string) {
   } finally {
     isFetchingApiKeys.set(false);
   }
+}
+
+// Simpan chat baru ke Supabase
+export async function saveChat({ userId, title, messages }: { userId: string, title: string, messages: any[] }) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('chat')
+    .insert([{ user_id: userId, title, messages }])
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Ambil semua chat milik user
+export async function fetchUserChats(userId: string) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('chat')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
 }

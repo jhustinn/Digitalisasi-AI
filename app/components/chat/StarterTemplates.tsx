@@ -24,13 +24,7 @@ const StarterTemplates: React.FC = () => {
   return (
     <div className="flex flex-col items-center gap-4">
       <span className="text-sm text-gray-500">or start a blank app with your favorite stack</span>
-      <div className="flex justify-center">
-        <div className="flex flex-wrap justify-center items-center gap-4 max-w-sm">
-          {STARTER_TEMPLATES.map((template) => (
-            <FrameworkLink key={template.name} template={template} />
-          ))}
-        </div>
-      </div>
+      {/* Hapus seluruh render section stack (ikon framework) di bawah chat. */}
     </div>
   );
 };

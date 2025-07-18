@@ -40,21 +40,6 @@ interface WorkspaceProps {
 
 const viewTransition = { ease: cubicEasingFn };
 
-const sliderOptions: SliderOptions<WorkbenchViewType> = {
-  left: {
-    value: 'code',
-    text: 'Code',
-  },
-  middle: {
-    value: 'diff',
-    text: 'Diff',
-  },
-  right: {
-    value: 'preview',
-    text: 'Preview',
-  },
-};
-
 const workbenchVariants = {
   closed: {
     width: 0,
@@ -394,7 +379,10 @@ export const Workbench = memo(
                       }
                     }}
                   />
-                  <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
+                  {/* In the workbench header, remove the Slider component so only the Preview tab is shown, without any tab selection UI. */}
+                  {/* Find the line: */}
+                  {/* <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} /> */}
+                  {/* and remove it. */}
                   <div className="ml-auto" />
                   {selectedView === 'code' && (
                     <div className="flex overflow-y-auto">

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { IconButton } from '~/components/ui/IconButton';
 import { workbenchStore } from '~/lib/stores/workbench';
@@ -69,6 +69,8 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
   const [isDeviceModeOn, setIsDeviceModeOn] = useState(false);
   const [widthPercent, setWidthPercent] = useState<number>(37.5);
   const [currentWidth, setCurrentWidth] = useState<number>(0);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [isFixing, setIsFixing] = useState(false);
 
   const resizingState = useRef({
     isResizing: false,
@@ -660,6 +662,22 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
     }
   };
 
+  // Error handler for iframe
+  const handleIframeError = useCallback(() => {
+    setPreviewError('Terjadi error pada preview.');
+  }, []);
+
+  // Handler for Fix button
+  const handleFixPreviewError = useCallback(() => {
+    setIsFixing(true);
+    // Example: reload preview (could be replaced with smarter fix logic)
+    setTimeout(() => {
+      setPreviewError(null);
+      setIsFixing(false);
+      reloadPreview();
+    }, 1000);
+  }, [reloadPreview]);
+
   return (
     <div ref={containerRef} className={`w-full h-full flex flex-col relative`}>
       {isPortDropdownOpen && (
@@ -910,7 +928,18 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
             alignItems: 'center',
           }}
         >
-          {activePreview ? (
+          {previewError ? (
+            <div className="flex flex-col items-center justify-center gap-4 p-8">
+              <div className="text-red-500 text-lg font-semibold">{previewError}</div>
+              <button
+                className="px-4 py-2 rounded bg-bolt-elements-button-primary-background text-bolt-elements-button-primary-text hover:bg-bolt-elements-button-primary-backgroundHover transition"
+                onClick={handleFixPreviewError}
+                disabled={isFixing}
+              >
+                {isFixing ? 'Memperbaiki...' : 'Perbaiki / Fix'}
+              </button>
+            </div>
+          ) : activePreview ? (
             <>
               {isDeviceModeOn && showDeviceFrameInPreview ? (
                 <div
@@ -991,6 +1020,7 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
                       src={iframeUrl}
                       sandbox="allow-scripts allow-forms allow-popups allow-modals allow-storage-access-by-user-activation allow-same-origin"
                       allow="cross-origin-isolated"
+                      onError={handleIframeError}
                     />
                   </div>
                 </div>
@@ -1001,7 +1031,8 @@ export const Preview = memo(({ setSelectedElement }: PreviewProps) => {
                   className="border-none w-full h-full bg-bolt-elements-background-depth-1"
                   src={iframeUrl}
                   sandbox="allow-scripts allow-forms allow-popups allow-modals allow-storage-access-by-user-activation allow-same-origin"
-                  allow="geolocation; ch-ua-full-version-list; cross-origin-isolated; screen-wake-lock; publickey-credentials-get; shared-storage-select-url; ch-ua-arch; bluetooth; compute-pressure; ch-prefers-reduced-transparency; deferred-fetch; usb; ch-save-data; publickey-credentials-create; shared-storage; deferred-fetch-minimal; run-ad-auction; ch-ua-form-factors; ch-downlink; otp-credentials; payment; ch-ua; ch-ua-model; ch-ect; autoplay; camera; private-state-token-issuance; accelerometer; ch-ua-platform-version; idle-detection; private-aggregation; interest-cohort; ch-viewport-height; local-fonts; ch-ua-platform; midi; ch-ua-full-version; xr-spatial-tracking; clipboard-read; gamepad; display-capture; keyboard-map; join-ad-interest-group; ch-width; ch-prefers-reduced-motion; browsing-topics; encrypted-media; gyroscope; serial; ch-rtt; ch-ua-mobile; window-management; unload; ch-dpr; ch-prefers-color-scheme; ch-ua-wow64; attribution-reporting; fullscreen; identity-credentials-get; private-state-token-redemption; hid; ch-ua-bitness; storage-access; sync-xhr; ch-device-memory; ch-viewport-width; picture-in-picture; magnetometer; clipboard-write; microphone"
+                  allow="geolocation; ch-ua-full-version-list; cross-origin-isolated; screen-wake-lock; publickey-credentials-get; shared-storage-select-url; ch-ua-arch; bluetooth; compute-pressure; ch-prefers-reduced-transparency; deferred-fetch; usb; ch-save-data; publickey-credentials-create; shared-storage; deferred-fetch-minimal; run-ad-auction; ch-ua-form-factors; ch-downlink; otp-credentials; payment; ch-ua; ch-ua-model; ch-ect; autoplay; camera; private-state-token-issuance; accelerometer; ch-ua-platform-version; idle-detection; private-state-token-redemption; hid; ch-ua-bitness; storage-access; sync-xhr; ch-device-memory; ch-viewport-width; picture-in-picture; magnetometer; clipboard-write; microphone"
+                  onError={handleIframeError}
                 />
               )}
               <ScreenshotSelector

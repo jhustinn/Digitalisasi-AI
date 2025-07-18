@@ -90,11 +90,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       chatStarted = false,
       isStreaming = false,
       onStreamingChange,
-      model,
-      setModel,
-      provider,
-      setProvider,
-      providerList,
       input = '',
       enhancingPrompt,
       handleInputChange,
@@ -131,7 +126,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
   ) => {
     const TEXTAREA_MAX_HEIGHT = chatStarted ? 400 : 200;
     const [apiKeys, setApiKeys] = useState<Record<string, string>>(getApiKeysFromCookies());
-    const [modelList, setModelList] = useState<ModelInfo[]>([]);
     const [isModelSettingsCollapsed, setIsModelSettingsCollapsed] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
@@ -212,7 +206,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
           .then((response) => response.json())
           .then((data) => {
             const typedData = data as { modelList: ModelInfo[] };
-            setModelList(typedData.modelList);
+            // setModelList(typedData.modelList); // Hapus ini
           })
           .catch((error) => {
             console.error('Error fetching model list:', error);
@@ -221,7 +215,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             setIsModelLoading(undefined);
           });
       }
-    }, [providerList, provider]);
+    }, []);
 
     const onApiKeysChange = async (providerName: string, apiKey: string) => {
       const newApiKeys = { ...apiKeys, [providerName]: apiKey };
@@ -241,10 +235,10 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       }
 
       // Only update models for the specific provider
-      setModelList((prevModels) => {
-        const otherModels = prevModels.filter((model) => model.provider !== providerName);
-        return [...otherModels, ...providerModels];
-      });
+      // setModelList((prevModels) => { // Hapus ini
+      //   const otherModels = prevModels.filter((model) => model.provider !== providerName);
+      //   return [...otherModels, ...providerModels];
+      // });
       setIsModelLoading(undefined);
     };
 
@@ -347,7 +341,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             {!chatStarted && (
               <div id="intro" className="mt-[16vh] max-w-2xl mx-auto text-center px-4 lg:px-0">
                 <h1 className="text-3xl lg:text-6xl font-bold text-bolt-elements-textPrimary mb-4 animate-fade-in">
-                  Where ideas begin
+                  Digitalisasi AI - Where ideas begin
                 </h1>
                 <p className="text-md lg:text-xl mb-8 text-bolt-elements-textSecondary animate-fade-in animation-delay-200">
                   Bring ideas to life in seconds or get help on existing projects.
@@ -372,8 +366,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                         append={append}
                         chatMode={chatMode}
                         setChatMode={setChatMode}
-                        provider={provider}
-                        model={model}
                       />
                     ) : null;
                   }}
@@ -422,12 +414,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 <ChatBox
                   isModelSettingsCollapsed={isModelSettingsCollapsed}
                   setIsModelSettingsCollapsed={setIsModelSettingsCollapsed}
-                  provider={provider}
-                  setProvider={setProvider}
-                  providerList={providerList || (PROVIDER_LIST as ProviderInfo[])}
-                  model={model}
-                  setModel={setModel}
-                  modelList={modelList}
                   apiKeys={apiKeys}
                   isModelLoading={isModelLoading}
                   onApiKeysChange={onApiKeysChange}
@@ -466,7 +452,7 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
             <div className="flex flex-col justify-center">
               {!chatStarted && (
                 <div className="flex justify-center gap-2">
-                  {ImportButtons(importChat)}
+                  {/* ImportButtons(importChat) dihilangkan sesuai permintaan user */}
                   <GitCloneButton importChat={importChat} />
                 </div>
               )}

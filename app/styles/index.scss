@@ -11,7 +11,8 @@ html,
 body {
   height: 100%;
   width: 100%;
-  background-color: var(--bolt-elements-bg-depth-1);
+  /* Blue vertical gradient background matching the screenshot */
+  background: linear-gradient(180deg, #15385e 0%, #1a4370 40%, #205086 100%);
 }
 
 :root {

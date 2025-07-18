@@ -26,10 +26,14 @@ import { getTemplates, selectStarterTemplate } from '~/utils/selectStarterTempla
 import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { filesToArtifacts } from '~/utils/fileUtils';
-import { supabaseConnection } from '~/lib/stores/supabase';
+import { supabaseConnection, updateSupabaseConnection, fetchUserChats, saveChat } from '~/lib/stores/supabase';
 import { defaultDesignScheme, type DesignScheme } from '~/types/design-scheme';
 import type { ElementInfo } from '~/components/workbench/Inspector';
 import type { LlmErrorAlertType } from '~/types/actions';
+import { AuthModal } from '../ui/AuthModal';
+import React from 'react';
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
+import { getSupabaseClient } from '~/lib/stores/supabase';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -47,6 +51,28 @@ export function Chat() {
     workbenchStore.setReloadedMessages(initialMessages.map((m) => m.id));
   }, [initialMessages]);
 
+  const [history, setHistory] = useState<any[]>([]);
+  const supabaseState = useStore(supabaseConnection);
+
+  // Fetch history saat user login
+  useEffect(() => {
+    if (supabaseState.user?.id) {
+      fetchUserChats(supabaseState.user.id)
+        .then(setHistory)
+        .catch(() => setHistory([]));
+    }
+  }, [supabaseState.user?.id]);
+
+  // Simpan chat ke Supabase setiap kali chat baru dikirim
+  const handleStoreMessageHistory = async (description: string, messages: any[]) => {
+    if (supabaseState.user?.id) {
+      await saveChat({ userId: supabaseState.user.id, title: description, messages });
+      // Refresh history
+      const chats = await fetchUserChats(supabaseState.user.id);
+      setHistory(chats);
+    }
+  };
+
   return (
     <>
       {ready && (
@@ -54,7 +80,7 @@ export function Chat() {
           description={title}
           initialMessages={initialMessages}
           exportChat={exportChat}
-          storeMessageHistory={storeMessageHistory}
+          storeMessageHistory={handleStoreMessageHistory}
           importChat={importChat}
         />
       )}
@@ -96,7 +122,7 @@ const processSampledMessages = createSampler(
     initialMessages: Message[];
     isLoading: boolean;
     parseMessages: (messages: Message[], isLoading: boolean) => void;
-    storeMessageHistory: (messages: Message[]) => Promise<void>;
+    storeMessageHistory: (description: string, messages: Message[]) => Promise<void>;
   }) => {
     const { messages, initialMessages, isLoading, parseMessages, storeMessageHistory } = options;
     parseMessages(messages, isLoading);
@@ -110,11 +136,16 @@ const processSampledMessages = createSampler(
 
 interface ChatProps {
   initialMessages: Message[];
-  storeMessageHistory: (messages: Message[]) => Promise<void>;
+  storeMessageHistory: (description: string, messages: Message[]) => Promise<void>;
   importChat: (description: string, messages: Message[]) => Promise<void>;
   exportChat: () => void;
   description?: string;
 }
+
+// Force provider and model to Gemini Pro
+const GEMINI_PROVIDER = PROVIDER_LIST.find((p) => p.name === 'Google');
+const GEMINI_MODEL = 'gemini-2.5-flash';
+if (!GEMINI_PROVIDER) throw new Error('Google Gemini provider not found in PROVIDER_LIST');
 
 export const ChatImpl = memo(
   ({ description, initialMessages, storeMessageHistory, importChat, exportChat }: ChatProps) => {
@@ -137,17 +168,12 @@ export const ChatImpl = memo(
     const supabaseAlert = useStore(workbenchStore.supabaseAlert);
     const { activeProviders, promptId, autoSelectTemplate, contextOptimizationEnabled } = useSettings();
     const [llmErrorAlert, setLlmErrorAlert] = useState<LlmErrorAlertType | undefined>(undefined);
-    const [model, setModel] = useState(() => {
-      const savedModel = Cookies.get('selectedModel');
-      return savedModel || DEFAULT_MODEL;
-    });
-    const [provider, setProvider] = useState(() => {
-      const savedProvider = Cookies.get('selectedProvider');
-      return (PROVIDER_LIST.find((p) => p.name === savedProvider) || DEFAULT_PROVIDER) as ProviderInfo;
-    });
+    // Force Gemini provider/model
+    const [model, setModel] = useState(GEMINI_MODEL);
+    const [provider, setProvider] = useState(GEMINI_PROVIDER as unknown as ProviderInfo);
     const { showChat } = useStore(chatStore);
     const [animationScope, animate] = useAnimate();
-    const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+    const [apiKeys, setApiKeys] = useState<Record<string, string>>({ Google: 'AIzaSyDDAdTc-EjloIVcsGJwTuBmy-4iz57B_gs' });
     const [chatMode, setChatMode] = useState<'discuss' | 'build'>('build');
     const [selectedElement, setSelectedElement] = useState<ElementInfo | null>(null);
     const {
@@ -571,86 +597,104 @@ export const ChatImpl = memo(
       }
     }, []);
 
-    const handleModelChange = (newModel: string) => {
-      setModel(newModel);
-      Cookies.set('selectedModel', newModel, { expires: 30 });
-    };
+    const supabaseState = useStore(supabaseConnection);
+    const [authOpen, setAuthOpen] = useState(false);
 
-    const handleProviderChange = (newProvider: ProviderInfo) => {
-      setProvider(newProvider);
-      Cookies.set('selectedProvider', newProvider.name, { expires: 30 });
-    };
+    useEffect(() => {
+      // Cek session Supabase
+      const supabase = getSupabaseClient();
+      supabase.auth.getUser().then(({ data }: { data: { user: User | null } }) => {
+        if (!data?.user) setAuthOpen(true);
+        else {
+          updateSupabaseConnection({ user: { id: data.user.id || '', email: data.user.email || '', role: '', created_at: '', last_sign_in_at: '' } });
+          setAuthOpen(false);
+        }
+      });
+      // Listen to auth changes
+      const { data: listener } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+        if (session?.user) {
+          updateSupabaseConnection({ user: { id: session.user.id || '', email: session.user.email || '', role: '', created_at: '', last_sign_in_at: '' } });
+          setAuthOpen(false);
+        } else {
+          setAuthOpen(true);
+        }
+      });
+      return () => { listener?.subscription.unsubscribe(); };
+    }, []);
 
     return (
-      <BaseChat
-        ref={animationScope}
-        textareaRef={textareaRef}
-        input={input}
-        showChat={showChat}
-        chatStarted={chatStarted}
-        isStreaming={isLoading || fakeLoading}
-        onStreamingChange={(streaming) => {
-          streamingState.set(streaming);
-        }}
-        enhancingPrompt={enhancingPrompt}
-        promptEnhanced={promptEnhanced}
-        sendMessage={sendMessage}
-        model={model}
-        setModel={handleModelChange}
-        provider={provider}
-        setProvider={handleProviderChange}
-        providerList={activeProviders}
-        handleInputChange={(e) => {
-          onTextareaChange(e);
-          debouncedCachePrompt(e);
-        }}
-        handleStop={abort}
-        description={description}
-        importChat={importChat}
-        exportChat={exportChat}
-        messages={messages.map((message, i) => {
-          if (message.role === 'user') {
-            return message;
-          }
+      <>
+        <AuthModal open={authOpen} onClose={() => {}} onAuthSuccess={() => setAuthOpen(false)} />
+        <BaseChat
+          ref={animationScope}
+          textareaRef={textareaRef}
+          input={input}
+          showChat={showChat}
+          chatStarted={chatStarted}
+          isStreaming={isLoading || fakeLoading}
+          onStreamingChange={(streaming) => {
+            streamingState.set(streaming);
+          }}
+          enhancingPrompt={enhancingPrompt}
+          promptEnhanced={promptEnhanced}
+          sendMessage={sendMessage}
+          model={model}
+          setModel={setModel}
+          provider={provider}
+          setProvider={setProvider}
+          providerList={activeProviders}
+          handleInputChange={(e) => {
+            onTextareaChange(e);
+            debouncedCachePrompt(e);
+          }}
+          handleStop={abort}
+          description={description}
+          importChat={importChat}
+          exportChat={exportChat}
+          messages={messages.map((message, i) => {
+            if (message.role === 'user') {
+              return message;
+            }
 
-          return {
-            ...message,
-            content: parsedMessages[i] || '',
-          };
-        })}
-        enhancePrompt={() => {
-          enhancePrompt(
-            input,
-            (input) => {
-              setInput(input);
-              scrollTextArea();
-            },
-            model,
-            provider,
-            apiKeys,
-          );
-        }}
-        uploadedFiles={uploadedFiles}
-        setUploadedFiles={setUploadedFiles}
-        imageDataList={imageDataList}
-        setImageDataList={setImageDataList}
-        actionAlert={actionAlert}
-        clearAlert={() => workbenchStore.clearAlert()}
-        supabaseAlert={supabaseAlert}
-        clearSupabaseAlert={() => workbenchStore.clearSupabaseAlert()}
-        deployAlert={deployAlert}
-        clearDeployAlert={() => workbenchStore.clearDeployAlert()}
-        llmErrorAlert={llmErrorAlert}
-        clearLlmErrorAlert={clearApiErrorAlert}
-        data={chatData}
-        chatMode={chatMode}
-        setChatMode={setChatMode}
-        append={append}
-        designScheme={designScheme}
-        setDesignScheme={setDesignScheme}
-        selectedElement={selectedElement}
-        setSelectedElement={setSelectedElement}
-      />
+            return {
+              ...message,
+              content: parsedMessages[i] || '',
+            };
+          })}
+          enhancePrompt={() => {
+            enhancePrompt(
+              input,
+              (input) => {
+                setInput(input);
+                scrollTextArea();
+              },
+              model,
+              provider,
+              apiKeys,
+            );
+          }}
+          uploadedFiles={uploadedFiles}
+          setUploadedFiles={setUploadedFiles}
+          imageDataList={imageDataList}
+          setImageDataList={setImageDataList}
+          actionAlert={actionAlert}
+          clearAlert={() => workbenchStore.clearAlert()}
+          supabaseAlert={supabaseAlert}
+          clearSupabaseAlert={() => workbenchStore.clearSupabaseAlert()}
+          deployAlert={deployAlert}
+          clearDeployAlert={() => workbenchStore.clearDeployAlert()}
+          llmErrorAlert={llmErrorAlert}
+          clearLlmErrorAlert={clearApiErrorAlert}
+          data={chatData}
+          chatMode={chatMode}
+          setChatMode={setChatMode}
+          append={append}
+          designScheme={designScheme}
+          setDesignScheme={setDesignScheme}
+          selectedElement={selectedElement}
+          setSelectedElement={setSelectedElement}
+        />
+      </>
     );
   },
 );

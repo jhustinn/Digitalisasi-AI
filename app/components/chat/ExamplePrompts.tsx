@@ -1,12 +1,18 @@
 import React from 'react';
 
 const EXAMPLE_PROMPTS = [
-  { text: 'Create a mobile app about bolt.diy' },
+  { text: 'Create a mobile app about SaaS' },
   { text: 'Build a todo app in React using Tailwind' },
   { text: 'Build a simple blog using Astro' },
   { text: 'Create a cookie consent form using Material UI' },
   { text: 'Make a space invaders game' },
   { text: 'Make a Tic Tac Toe game in html, css and js only' },
+  // { text: 'Buat landing page profesional untuk perusahaan teknologi' },
+  // { text: 'Tulis profil perusahaan untuk website corporate' },
+  // { text: 'Buat halaman layanan (services) untuk perusahaan konsultan bisnis' },
+  // { text: 'Tulis deskripsi "About Us" yang menarik untuk startup fintech' },
+  // { text: 'Buat halaman kontak (Contact Us) formal untuk website perusahaan' },
+  // { text: 'Tulis FAQ untuk website perusahaan SaaS' },
 ];
 
 export function ExamplePrompts(sendMessage?: { (event: React.UIEvent, messageInput?: string): void | undefined }) {
