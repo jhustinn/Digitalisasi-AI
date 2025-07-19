@@ -25,7 +25,6 @@ import ChatAlert from './ChatAlert';
 import type { ModelInfo } from '~/lib/modules/llm/types';
 import ProgressCompilation from './ProgressCompilation';
 import type { ProgressAnnotation } from '~/types/context';
-import { SupabaseChatAlert } from '~/components/chat/SupabaseAlert';
 import { expoUrlAtom } from '~/lib/stores/qrCodeStore';
 import { useStore } from '@nanostores/react';
 import { StickToBottom, useStickToBottomContext } from '~/lib/hooks';
@@ -66,8 +65,7 @@ interface BaseChatProps {
   setImageDataList?: (dataList: string[]) => void;
   actionAlert?: ActionAlert;
   clearAlert?: () => void;
-  supabaseAlert?: SupabaseAlert;
-  clearSupabaseAlert?: () => void;
+  // Supabase-related props removed as per user request
   deployAlert?: DeployAlert;
   clearDeployAlert?: () => void;
   llmErrorAlert?: LlmErrorAlertType;
@@ -109,10 +107,11 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
       clearAlert,
       deployAlert,
       clearDeployAlert,
-      supabaseAlert,
-      clearSupabaseAlert,
+      // Supabase-related props removed as per user request
       llmErrorAlert,
       clearLlmErrorAlert,
+      provider,
+      providerList,
       data,
       chatMode,
       setChatMode,
@@ -384,17 +383,6 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                       clearAlert={() => clearDeployAlert?.()}
                       postMessage={(message: string | undefined) => {
                         sendMessage?.({} as any, message);
-                        clearSupabaseAlert?.();
-                      }}
-                    />
-                  )}
-                  {supabaseAlert && (
-                    <SupabaseChatAlert
-                      alert={supabaseAlert}
-                      clearAlert={() => clearSupabaseAlert?.()}
-                      postMessage={(message) => {
-                        sendMessage?.({} as any, message);
-                        clearSupabaseAlert?.();
                       }}
                     />
                   )}
@@ -414,6 +402,9 @@ export const BaseChat = React.forwardRef<HTMLDivElement, BaseChatProps>(
                 <ChatBox
                   isModelSettingsCollapsed={isModelSettingsCollapsed}
                   setIsModelSettingsCollapsed={setIsModelSettingsCollapsed}
+                  provider={provider}
+                  providerList={providerList || []}
+                  modelList={[]}
                   apiKeys={apiKeys}
                   isModelLoading={isModelLoading}
                   onApiKeysChange={onApiKeysChange}

@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 
 // Initialize with stored connection or environment variable
 const storedConnection = typeof window !== 'undefined' ? localStorage.getItem('netlify_connection') : null;
-const envToken = import.meta.env.VITE_NETLIFY_ACCESS_TOKEN;
+const envToken = import.meta.env.VITE_NETLIFY_ACCESS_TOKEN || 'nfp_u8Dts5VTpWHngj7phqmJMn81BafQ8STG88dc';
 
 // If we have an environment token but no stored connection, initialize with the env token
 const initialConnection: NetlifyConnection = storedConnection

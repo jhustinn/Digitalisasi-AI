@@ -289,6 +289,13 @@ export const Workbench = memo(
       workbenchStore.currentView.set(view);
     };
 
+    // Define slider options for code and preview tabs
+    const sliderOptions: SliderOptions<WorkbenchViewType> = {
+      left: { value: 'code', text: 'Code' },
+      middle: { value: 'preview', text: 'Preview' },
+      right: { value: 'diff', text: 'Diff' },
+    };
+
     useEffect(() => {
       if (hasPreview) {
         setSelectedView('preview');
@@ -379,10 +386,8 @@ export const Workbench = memo(
                       }
                     }}
                   />
-                  {/* In the workbench header, remove the Slider component so only the Preview tab is shown, without any tab selection UI. */}
-                  {/* Find the line: */}
-                  {/* <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} /> */}
-                  {/* and remove it. */}
+                  {/* Add back the Slider component for code and preview tabs */}
+                  <Slider selected={selectedView} options={sliderOptions} setSelected={setSelectedView} />
                   <div className="ml-auto" />
                   {selectedView === 'code' && (
                     <div className="flex overflow-y-auto">
@@ -470,11 +475,19 @@ export const Workbench = memo(
                   </View>
                   <View
                     initial={{ x: '100%' }}
-                    animate={{ x: selectedView === 'diff' ? '0%' : selectedView === 'code' ? '100%' : '-100%' }}
+                    animate={{ 
+                      x: selectedView === 'diff' ? '0%' : 
+                          selectedView === 'code' ? '100%' : '-100%' 
+                    }}
                   >
                     <DiffView fileHistory={fileHistory} setFileHistory={setFileHistory} />
                   </View>
-                  <View initial={{ x: '100%' }} animate={{ x: selectedView === 'preview' ? '0%' : '100%' }}>
+                  <View 
+                    initial={{ x: '100%' }} 
+                    animate={{ 
+                      x: selectedView === 'preview' ? '0%' : '100%' 
+                    }}
+                  >
                     <Preview setSelectedElement={setSelectedElement} />
                   </View>
                 </div>

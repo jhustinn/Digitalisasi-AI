@@ -20,8 +20,17 @@ export function useVercelDeploy() {
     }
 
     if (!currentChatId) {
-      toast.error('No active chat found');
-      return false;
+      // Try to get chatId from URL as fallback
+      const urlMatch = window.location.pathname.match(/\/chat\/([^/]+)/);
+      const urlChatId = urlMatch ? urlMatch[1] : null;
+      
+      if (!urlChatId) {
+        toast.error('No active chat found. Please start a new chat first.');
+        return false;
+      }
+      
+      // Set the chatId from URL
+      chatId.set(urlChatId);
     }
 
     try {

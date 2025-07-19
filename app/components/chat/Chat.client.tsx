@@ -26,14 +26,10 @@ import { getTemplates, selectStarterTemplate } from '~/utils/selectStarterTempla
 import { logStore } from '~/lib/stores/logs';
 import { streamingState } from '~/lib/stores/streaming';
 import { filesToArtifacts } from '~/utils/fileUtils';
-import { supabaseConnection, updateSupabaseConnection, fetchUserChats, saveChat } from '~/lib/stores/supabase';
 import { defaultDesignScheme, type DesignScheme } from '~/types/design-scheme';
 import type { ElementInfo } from '~/components/workbench/Inspector';
 import type { LlmErrorAlertType } from '~/types/actions';
-import { AuthModal } from '../ui/AuthModal';
 import React from 'react';
-import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
-import { getSupabaseClient } from '~/lib/stores/supabase';
 
 const toastAnimation = cssTransition({
   enter: 'animated fadeInRight',
@@ -52,24 +48,16 @@ export function Chat() {
   }, [initialMessages]);
 
   const [history, setHistory] = useState<any[]>([]);
-  const supabaseState = useStore(supabaseConnection);
 
-  // Fetch history saat user login
-  useEffect(() => {
-    if (supabaseState.user?.id) {
-      fetchUserChats(supabaseState.user.id)
-        .then(setHistory)
-        .catch(() => setHistory([]));
-    }
-  }, [supabaseState.user?.id]);
-
-  // Simpan chat ke Supabase setiap kali chat baru dikirim
+  // Simpan chat ke lokal setiap kali chat baru dikirim
   const handleStoreMessageHistory = async (description: string, messages: any[]) => {
-    if (supabaseState.user?.id) {
-      await saveChat({ userId: supabaseState.user.id, title: description, messages });
-      // Refresh history
-      const chats = await fetchUserChats(supabaseState.user.id);
-      setHistory(chats);
+    try {
+      console.log('Storing message history:', { description, messagesCount: messages.length });
+      await storeMessageHistory(messages);
+      console.log('Message history stored successfully');
+    } catch (error) {
+      console.error('Failed to store message history:', error);
+      toast.error('Failed to save chat history');
     }
   };
 
@@ -127,8 +115,17 @@ const processSampledMessages = createSampler(
     const { messages, initialMessages, isLoading, parseMessages, storeMessageHistory } = options;
     parseMessages(messages, isLoading);
 
-    if (messages.length > initialMessages.length) {
-      storeMessageHistory(messages).catch((error) => toast.error(error.message));
+    // Save chat history when messages change and not loading
+    if (messages.length > initialMessages.length && !isLoading) {
+      const description = messages[messages.length - 1]?.content || 'Chat';
+      console.log('Saving chat history via processSampledMessages:', { 
+        messagesCount: messages.length, 
+        description 
+      });
+      storeMessageHistory(description, messages).catch((error) => {
+        console.error('Failed to save chat history:', error);
+        toast.error('Failed to save chat history: ' + error.message);
+      });
     }
   },
   50,
@@ -161,11 +158,7 @@ export const ChatImpl = memo(
     const [designScheme, setDesignScheme] = useState<DesignScheme>(defaultDesignScheme);
     const actionAlert = useStore(workbenchStore.alert);
     const deployAlert = useStore(workbenchStore.deployAlert);
-    const supabaseConn = useStore(supabaseConnection);
-    const selectedProject = supabaseConn.stats?.projects?.find(
-      (project) => project.id === supabaseConn.selectedProjectId,
-    );
-    const supabaseAlert = useStore(workbenchStore.supabaseAlert);
+      // Supabase-related code removed as per user request
     const { activeProviders, promptId, autoSelectTemplate, contextOptimizationEnabled } = useSettings();
     const [llmErrorAlert, setLlmErrorAlert] = useState<LlmErrorAlertType | undefined>(undefined);
     // Force Gemini provider/model
@@ -198,14 +191,6 @@ export const ChatImpl = memo(
         contextOptimization: contextOptimizationEnabled,
         chatMode,
         designScheme,
-        supabase: {
-          isConnected: supabaseConn.isConnected,
-          hasSelectedProject: !!selectedProject,
-          credentials: {
-            supabaseUrl: supabaseConn?.credentials?.supabaseUrl,
-            anonKey: supabaseConn?.credentials?.anonKey,
-          },
-        },
       },
       sendExtraMessageFields: true,
       onError: (e) => {
@@ -271,6 +256,16 @@ export const ChatImpl = memo(
         storeMessageHistory,
       });
     }, [messages, isLoading, parseMessages]);
+
+    // Add debugging for message changes
+    useEffect(() => {
+      console.log('Messages changed:', {
+        messagesCount: messages.length,
+        initialMessagesCount: initialMessages.length,
+        isLoading,
+        hasNewMessages: messages.length > initialMessages.length
+      });
+    }, [messages, initialMessages, isLoading]);
 
     const scrollTextArea = () => {
       const textarea = textareaRef.current;
@@ -597,34 +592,11 @@ export const ChatImpl = memo(
       }
     }, []);
 
-    const supabaseState = useStore(supabaseConnection);
-    const [authOpen, setAuthOpen] = useState(false);
-
-    useEffect(() => {
-      // Cek session Supabase
-      const supabase = getSupabaseClient();
-      supabase.auth.getUser().then(({ data }: { data: { user: User | null } }) => {
-        if (!data?.user) setAuthOpen(true);
-        else {
-          updateSupabaseConnection({ user: { id: data.user.id || '', email: data.user.email || '', role: '', created_at: '', last_sign_in_at: '' } });
-          setAuthOpen(false);
-        }
-      });
-      // Listen to auth changes
-      const { data: listener } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
-        if (session?.user) {
-          updateSupabaseConnection({ user: { id: session.user.id || '', email: session.user.email || '', role: '', created_at: '', last_sign_in_at: '' } });
-          setAuthOpen(false);
-        } else {
-          setAuthOpen(true);
-        }
-      });
-      return () => { listener?.subscription.unsubscribe(); };
-    }, []);
+    // Hapus semua logic, variable, dan pemanggilan yang error karena supabase sudah dihapus
+    // Pastikan hanya logic chat utama yang tersisa
 
     return (
       <>
-        <AuthModal open={authOpen} onClose={() => {}} onAuthSuccess={() => setAuthOpen(false)} />
         <BaseChat
           ref={animationScope}
           textareaRef={textareaRef}
@@ -679,8 +651,7 @@ export const ChatImpl = memo(
           setImageDataList={setImageDataList}
           actionAlert={actionAlert}
           clearAlert={() => workbenchStore.clearAlert()}
-          supabaseAlert={supabaseAlert}
-          clearSupabaseAlert={() => workbenchStore.clearSupabaseAlert()}
+          // Supabase-related props removed as per user request
           deployAlert={deployAlert}
           clearDeployAlert={() => workbenchStore.clearDeployAlert()}
           llmErrorAlert={llmErrorAlert}

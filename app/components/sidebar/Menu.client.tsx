@@ -3,8 +3,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import { Dialog, DialogButton, DialogDescription, DialogRoot, DialogTitle } from '~/components/ui/Dialog';
 import { ThemeSwitch } from '~/components/ui/ThemeSwitch';
-import { ControlPanel } from '~/components/@settings/core/ControlPanel';
-import { SettingsButton } from '~/components/ui/SettingsButton';
 import { Button } from '~/components/ui/Button';
 import { db, deleteById, getAll, chatId, type ChatHistoryItem, useChatHistory } from '~/lib/persistence';
 import { cubicEasingFn } from '~/utils/easings';
@@ -14,6 +12,8 @@ import { useSearchFilter } from '~/lib/hooks/useSearchFilter';
 import { classNames } from '~/utils/classNames';
 import { useStore } from '@nanostores/react';
 import { profileStore } from '~/lib/stores/profile';
+import { generateId } from 'ai';
+import { createChatFromMessages } from '~/lib/persistence/db';
 
 const menuVariants = {
   closed: {
@@ -64,12 +64,11 @@ function CurrentDateTime() {
 }
 
 export const Menu = () => {
-  const { duplicateCurrentChat, exportChat } = useChatHistory();
+  const { duplicateCurrentChat, exportChat, importChat } = useChatHistory();
   const menuRef = useRef<HTMLDivElement>(null);
   const [list, setList] = useState<ChatHistoryItem[]>([]);
   const [open, setOpen] = useState(false);
   const [dialogContent, setDialogContent] = useState<DialogContent>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const profile = useStore(profileStore);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -80,11 +79,22 @@ export const Menu = () => {
   });
 
   const loadEntries = useCallback(() => {
+    console.log('Loading chat entries...');
     if (db) {
+      console.log('Database is available, fetching chats...');
       getAll(db)
-        .then((list) => list.filter((item) => item.urlId && item.description))
-        .then(setList)
-        .catch((error) => toast.error(error.message));
+        .then((list) => {
+          console.log('Raw chat list:', list);
+          const filteredList = list.filter((item) => item.urlId && item.description);
+          console.log('Filtered chat list:', filteredList);
+          setList(filteredList);
+        })
+        .catch((error) => {
+          console.error('Error loading chats:', error);
+          toast.error(error.message);
+        });
+    } else {
+      console.log('Database not available for loading entries');
     }
   }, []);
 
@@ -262,10 +272,9 @@ export const Menu = () => {
   }, [filteredList]); // Depends only on filteredList
 
   useEffect(() => {
-    if (open) {
-      loadEntries();
-    }
-  }, [open, loadEntries]);
+    console.log('Menu component mounted, database status:', !!db);
+    loadEntries();
+  }, [loadEntries]);
 
   // Exit selection mode when sidebar is closed
   useEffect(() => {
@@ -283,39 +292,90 @@ export const Menu = () => {
     const exitThreshold = 20;
 
     function onMouseMove(event: MouseEvent) {
-      if (isSettingsOpen) {
+      if (open) {
+        // If sidebar is open, check if mouse is outside to close it
+        if (menuRef.current) {
+          const rect = menuRef.current.getBoundingClientRect();
+          if (event.clientX > rect.right + exitThreshold) {
+            setOpen(false);
+          }
+        }
         return;
       }
 
+      // If sidebar is closed, check if mouse is near left edge to open it
       if (event.pageX < enterThreshold) {
         setOpen(true);
       }
+    }
 
-      if (menuRef.current && event.clientX > menuRef.current.getBoundingClientRect().right + exitThreshold) {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && open) {
         setOpen(false);
       }
     }
 
+    function onToggleSidebar(event: CustomEvent) {
+      setOpen(event.detail);
+    }
+
     window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('toggleSidebar', onToggleSidebar as EventListener);
 
     return () => {
       window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('toggleSidebar', onToggleSidebar as EventListener);
     };
-  }, [isSettingsOpen]);
+  }, [open]);
 
   const handleDuplicate = async (id: string) => {
     await duplicateCurrentChat(id);
     loadEntries(); // Reload the list after duplication
   };
 
-  const handleSettingsClick = () => {
-    setIsSettingsOpen(true);
-    setOpen(false);
-  };
+  const handleNewChat = useCallback(async () => {
+    try {
+      console.log('Starting new chat creation...');
+      
+      if (!db) {
+        console.error('Database not available');
+        toast.error('Database not available');
+        // If no database, just navigate to home
+        window.location.href = '/';
+        return;
+      }
 
-  const handleSettingsClose = () => {
-    setIsSettingsOpen(false);
-  };
+      console.log('Database available, creating new chat...');
+
+      // Create a new empty chat
+      const newChatId = await createChatFromMessages(
+        db,
+        'New Chat',
+        [],
+        undefined // No metadata for new chat
+      );
+
+      console.log('New chat created with ID:', newChatId);
+
+      // Set the chatId immediately so other components can access it
+      chatId.set(newChatId);
+
+      // Reload the chat list to show the new chat
+      loadEntries();
+
+      // Navigate to the new chat using navigate instead of window.location.href
+      console.log('Navigating to new chat:', `/chat/${newChatId}`);
+      window.location.href = `/chat/${newChatId}`;
+      toast.success('New chat created!');
+    } catch (error) {
+      console.error('Failed to create new chat:', error);
+      toast.error('Failed to create new chat: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      // Fallback to home page
+      window.location.href = '/';
+    }
+  }, [db, loadEntries]);
 
   const setDialogContentWithLogging = useCallback((content: DialogContent) => {
     console.log('Setting dialog content:', content);
@@ -324,6 +384,16 @@ export const Menu = () => {
 
   return (
     <>
+      {/* Backdrop overlay */}
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/20 z-30"
+          onClick={() => setOpen(false)}
+        />
+      )}
       <motion.div
         ref={menuRef}
         initial="closed"
@@ -334,41 +404,52 @@ export const Menu = () => {
           'flex selection-accent flex-col side-menu fixed top-0 h-full rounded-r-2xl',
           'bg-white dark:bg-gray-950 border-r border-bolt-elements-borderColor',
           'shadow-sm text-sm',
-          isSettingsOpen ? 'z-40' : 'z-sidebar',
+          open ? 'z-50' : 'z-30',
         )}
       >
         <div className="h-12 flex items-center justify-between px-4 border-b border-gray-100 dark:border-gray-800/50 bg-gray-50/50 dark:bg-gray-900/50 rounded-tr-2xl">
-          <div className="text-gray-900 dark:text-white font-medium"></div>
-          <div className="flex items-center gap-3">
-            <span className="font-medium text-sm text-gray-900 dark:text-white truncate">
-              {profile?.username || 'Guest User'}
-            </span>
-            <div className="flex items-center justify-center w-[32px] h-[32px] overflow-hidden bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-500 rounded-full shrink-0">
-              {profile?.avatar ? (
-                <img
-                  src={profile.avatar}
-                  alt={profile?.username || 'User'}
-                  className="w-full h-full object-cover"
-                  loading="eager"
-                  decoding="sync"
-                />
-              ) : (
-                <div className="i-ph:user-fill text-lg" />
-              )}
-            </div>
-          </div>
+          <div className="text-gray-900 dark:text-white font-medium">Chat History</div>
+          <button
+            onClick={() => setOpen(false)}
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            title="Close sidebar"
+          >
+            <span className="i-ph:x h-4 w-4 text-gray-600 dark:text-gray-400" />
+          </button>
         </div>
         <CurrentDateTime />
         <div className="flex-1 flex flex-col h-full w-full overflow-hidden">
           <div className="p-4 space-y-3">
             <div className="flex gap-2">
-              <a
-                href="/"
+              <button
+                onClick={handleNewChat}
                 className="flex-1 flex gap-2 items-center bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/20 rounded-lg px-4 py-2 transition-colors"
               >
                 <span className="inline-block i-ph:plus-circle h-4 w-4" />
                 <span className="text-sm font-medium">Start new chat</span>
-              </a>
+              </button>
+              <button
+                onClick={async () => {
+                  console.log('Testing database...');
+                  if (db) {
+                    try {
+                      const allChats = await getAll(db);
+                      console.log('All chats in database:', allChats);
+                      toast.info(`Found ${allChats.length} chats in database`);
+                    } catch (error) {
+                      console.error('Database test failed:', error);
+                      toast.error('Database test failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                    }
+                  } else {
+                    console.log('Database not available');
+                    toast.error('Database not available');
+                  }
+                }}
+                className="px-2 py-2 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                title="Test Database"
+              >
+                <span className="inline-block i-ph:bug h-4 w-4" />
+              </button>
               <button
                 onClick={toggleSelectionMode}
                 className={classNames(
@@ -525,13 +606,12 @@ export const Menu = () => {
             </DialogRoot>
           </div>
           <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-800 px-4 py-3">
-            <SettingsButton onClick={handleSettingsClick} />
             <ThemeSwitch />
           </div>
         </div>
       </motion.div>
 
-      <ControlPanel open={isSettingsOpen} onClose={handleSettingsClose} />
+      {/* ControlPanel component is no longer used */}
     </>
   );
 };
